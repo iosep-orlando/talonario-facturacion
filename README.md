@@ -20,9 +20,12 @@ El enunciado original está en [README-enunciado.md](README-enunciado.md).
 
 ## Demo
 
-Se publica en **https://talonario-facturacion.onrender.com** (pendiente:
-ver «Despliegue»). Es el plan gratuito: si estuvo un rato sin visitas,
-tarda unos 50 segundos en despertar.
+**https://talonario-facturacion.onrender.com** (plan gratuito: si estuvo un
+rato sin visitas, tarda unos 50 segundos en despertar).
+
+Para ver los datos de ejemplo, entrá con **`demo@demo.test`**: tiene el
+emisor, los seis clientes, las facturas de los últimos meses y un borrador
+para emitir.
 
 Entrá con cualquier email inventado, por ejemplo `tu-nombre@demo.test`. La
 demo no manda mails de verdad: el enlace para entrar y las facturas
@@ -173,21 +176,22 @@ avisa en la consola. Si RustFS no está levantado, avisa y arranca igual.
 ## Despliegue
 
 La demo corre en **Render** (plan gratuito), con la base en **MongoDB
-Atlas** y los PDF en un **bucket S3 en la nube**. La configuración está en
+Atlas** y los PDF en **Supabase Storage**, que es compatible con S3. La configuración está en
 [`render.yaml`](render.yaml).
 
 | Pieza | Servicio | Plan |
 |-------|----------|------|
 | App Next.js | Render, servicio web (Virginia) | Free |
 | Base de datos | MongoDB Atlas, AWS N. Virginia | Free (M0) |
-| PDF y logos | Backblaze B2 (compatible con S3) | Free (10 GB) |
+| PDF y logos | Supabase Storage por S3, East US (North Virginia) | Free (1 GB) |
 | Correo | Bandeja de demo en la propia base (`MAIL_TRANSPORT=outbox`) | Sin costo |
 
 1. **Base.** Sirve el clúster de Atlas de otros proyectos: esta app usa la
    base `saas_facturacion`.
-2. **Bucket.** En Backblaze B2, crear un bucket **privado** y una
-   *Application Key* con acceso solo a ese bucket. El bucket muestra su
-   *Endpoint* (`s3.<región>.backblazeb2.com`).
+2. **Bucket.** En Supabase, crear un proyecto en *East US (North
+   Virginia)* y, en *Storage*, un bucket **privado** llamado `facturas`.
+   En *Storage → S3* (o *Settings → Storage*): dejar prendida la conexión
+   por S3, anotar el *Endpoint* y crear una *access key*.
 3. **Código en GitHub**, porque Render no se conecta al GitLab de la
    academia.
 4. **Servicio.** En Render, *New → Blueprint* con ese repositorio. Render
@@ -196,17 +200,38 @@ Atlas** y los PDF en un **bucket S3 en la nube**. La configuración está en
    | Variable | Valor |
    |----------|-------|
    | `MONGODB_URI` | La cadena de Atlas |
-   | `AWS_URL` | `https://` + el endpoint del bucket |
-   | `AWS_REGION` | La región del endpoint, por ejemplo `us-east-005` |
-   | `AWS_BUCKET` | El nombre del bucket |
-   | `AWS_USERNAME` | El *keyID* de la Application Key |
-   | `AWS_PASSWORD` | La *applicationKey* |
+   | `AWS_URL` | El endpoint: `https://<proyecto>.storage.supabase.co/storage/v1/s3` |
+   | `AWS_REGION` | La región del proyecto: `us-east-1` |
+   | `AWS_BUCKET` | `facturas` |
+   | `AWS_USERNAME` | El *Access key ID* |
+   | `AWS_PASSWORD` | El *Secret access key* |
 
-5. **Datos de ejemplo** (opcional), desde tu máquina, con la cadena de Atlas
-   en la variable `MONGODB_URI` y `SEED_OWNER_EMAIL=demo@demo.test`.
+5. **Datos de ejemplo**, desde tu máquina. La cadena se pide sin mostrarla y
+   no queda en el historial; la variable le gana a la de `.env.local`:
 
-El código es el mismo que en local: cambiar de RustFS a B2 es solo cambiar
-las variables `AWS_*` (decisión 7).
+   ```bash
+   read -rs -p "Cadena de Atlas: " ATLAS; echo; MONGODB_URI="$ATLAS" SEED_OWNER_EMAIL=demo@demo.test npx tsx scripts/seed.ts; unset ATLAS
+   ```
+
+El código es el mismo que en local: pasar de RustFS a Supabase es solo
+cambiar las variables `AWS_*` (decisión 7).
+
+Comprobado en la versión publicada, con `demo@demo.test`:
+
+- ingreso con el enlace de la bandeja de demo;
+- emisión del borrador como Factura A 0001-00000007;
+- su PDF, abierto desde el panel y guardado en el bucket de Supabase;
+- el envío, que llegó a la bandeja de `lucia.fernandez@correo.test` con el
+  PDF adjunto.
+
+Lo que implica el plan gratuito:
+
+- **Render duerme a los 15 minutos sin visitas**; la primera visita después
+  tarda unos 50 segundos.
+- **Supabase pausa el proyecto tras una semana sin uso.** Se reactiva desde
+  su panel; mientras tanto, emitir funciona igual y el PDF da 503 hasta que
+  vuelve (decisión 7).
+- **Atlas pausa el clúster tras 30 días sin conexiones.**
 
 ## Tests y cobertura
 
@@ -361,7 +386,8 @@ persistente gratis.
 
 - **Un mismo código.** `lib/storage.ts` usa el SDK de AWS con
   `forcePathStyle` y las variables del enunciado (`AWS_URL`,
-  `AWS_USERNAME`…). En local apunta a RustFS; en la demo, a Backblaze B2.
+  `AWS_USERNAME`…). En local apunta a RustFS; en la demo, a Supabase
+  Storage, que también habla S3.
 - **El bucket** se crea si no existe: al arrancar y, si falló, en el primer
   uso.
 - **El bucket es privado.** Los archivos se sirven por la API, que comprueba
@@ -443,7 +469,7 @@ de escribir código decidí cuatro cosas:
 - la vida de la factura: borrador, emitida, pagada;
 - los extras: PDF en RustFS, envío por email, panel con métricas, y logo y
   datos del emisor;
-- y publicar la demo con un bucket S3 en la nube.
+- y publicar la demo con un bucket S3 en la nube (terminó siendo Supabase).
 
 Lo que se revisó y cambió sobre lo generado:
 
@@ -451,6 +477,11 @@ Lo que se revisó y cambió sobre lo generado:
   deshacía la primera edición.** Next.js 16 esconde las páginas en vez de
   cerrarlas, y el formulario volvía a los datos de la primera visita. Se
   corrigió reiniciando el editor cuando el borrador cambió (decisión 9).
+- **El primer proveedor elegido para la demo fue Backblaze B2**, pero su
+  formulario de registro no avanzaba ni en Chrome ni en Edge. Se cambió a
+  Supabase Storage, sin tarjeta, tras comprobar en su documentación que su
+  S3 usa la misma configuración que `lib/storage.ts`. No hubo que tocar
+  código, solo las variables (decisión 7).
 - **Se buscó un ejemplo real del error de coma flotante** para la landing.
   `3 × 1234.57` daba bien; `4.35 × 100` da `434.99999999999994`.
 - **Al decidir el redondeo del IVA** se comparó por alícuota contra por
