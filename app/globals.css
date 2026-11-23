@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+/* Talonario: la tinta violeta del papel carbónico sobre papel de oficina.
+   Un solo color de acción (el carbónico); el amarillo es el de la hoja
+   duplicado y marca lo que todavía es borrador; verde y rojo son los
+   sellos de "pagada" y "anulada / vencida". */
+@theme inline {
+  --font-sans: var(--font-public-sans);
+  --font-display: var(--font-bricolage);
+  --color-papel: #f3f4ef;
+  --color-tinta: #1c1b2e;
+  --color-muted: #5e6170;
+  --color-line: #d9dbd3;
+  --color-carbonico: #3d35a8;
+  --color-carbonico-dark: #2e2785;
+  --color-duplicado: #fbefb0;
+  --color-pagada: #2e7d4f;
+  --color-sello: #b4372b;
+}
+
+/* Bricolage Grotesque, angosta y pesada para los títulos. */
+.display {
+  font-family: var(--font-bricolage);
+  font-stretch: 85%;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+/* Los importes en columnas: cifras del mismo ancho. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* El borde troquelado de una hoja de talonario. */
+.perforated {
+  background-image: radial-gradient(circle at 0 6px, var(--color-papel) 3px, transparent 3.5px);
+  background-size: 8px 12px;
+  background-repeat: repeat-y;
+}
+
+@layer base {
+  :where(a, button, input, textarea, select, summary):focus-visible {
+    outline: 2px solid var(--color-carbonico);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* El sello de "PAGADA" de la portada: cae una sola vez, al cargar. */
+@keyframes stamp-in {
+  0% {
+    opacity: 0;
+    transform: rotate(-14deg) scale(1.8);
+  }
+  60% {
+    opacity: 1;
+    transform: rotate(-14deg) scale(0.94);
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(-14deg) scale(1);
+  }
+}
+
+.stamp-in {
+  opacity: 0;
+  animation: stamp-in 0.45s cubic-bezier(0.3, 0.7, 0.4, 1) 0.9s forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stamp-in {
+    opacity: 1;
+    animation: none;
+    transform: rotate(-14deg);
+  }
+}
